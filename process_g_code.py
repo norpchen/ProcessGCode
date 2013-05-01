@@ -27,7 +27,7 @@ import argparse
 #globals
 args =0
 lcd_comment_string = ""
-version_string = "%(prog)s 0.8"
+version_string = "%(prog)s 0.8.1"
 
 # some state information
 has_raft = 0

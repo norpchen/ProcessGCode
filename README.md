@@ -3,7 +3,7 @@ ProcessGCode
 
 G-Code post processor
 
-Uses Python 3.3.1, but should work in 3.2 or later. 
+Uses Python 3.3.1, but should work in 3.2 or later.   Use -h for help on commands and options.
 
 Some of the functionality will work on any g-code, but there's more stuff it can do with KISSlicer's output because of the copious comments (thanks Jonathan!) 
 
