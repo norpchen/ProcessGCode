@@ -295,7 +295,7 @@ def main(argv):
 # when we start echoing comments to the LCD display
         line = re.sub ("\*","-",line)
 #get rid of multiple whitespace        
-        line = re.sub ("\s\s*$"," ",line)
+#        line = re.sub ("\s\s*$"," ",line)
         
 #now look for interesting comments, like the path type:        
         comment_tag = re.search("^;\s+'(.*)'(.*)",line)
