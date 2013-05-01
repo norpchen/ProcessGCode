@@ -30,37 +30,7 @@ lcd_comment_string = ""
 version_string = "%(prog)s 0.8"
 
 # some state information
-has_raft = 0Yesterday I wrote up a G-Code post processor in Python and I'm posting it here in case anyone finds it of use.  It's written in python 3.3.1, but should work in 3.2 or later.  If there's interest, I can look into making it an .exe instead of just a raw python script.
-
-Some of the functionality will work on any g-code, but there's more stuff it can do with KISSlicer's output because of the copious comments (thanks Jonathan!) 
-
-Here's what it is currently capable of:
-
-First, the basics that work with any g-code:
-
-* Offset XY position
-* Remove redundant move coordinates (slightly smaller file) 
-* Remove XY moves smaller than a given threshold
-* Adjust fan speed, bed and extruder temperatures throughout file
-* Adjust flow and feed rates throughout the file
-
-Then the more fun KISSlicer specific stuff:
-
-* Inject commands to display the current layer number on the LCD of your printer (M70 or M117 commands)
-* Inject commands to set the RGB mood light LED to match the path type as shown in KISSlicer
-* Inject commands to show the path type in the LCD of your printer
-* Move the slicing summary from the bottom of the file to the top of the file
-* Cool the bed temperature by X degrees at layer Y
-* Turn on / off the fan for all 'Support Interface' paths (I find it makes it easier to remove the support cleanly)
-* Turn on / off the fan for all 'Stacked Sparse Infill" paths
-* Turn on the fan and adjust the extruder temperature to make the raft easier to remove cleanly (only activates if it detects there is a raft)
-
-The layer and path type detection from the comments makes it easy to add additional functionality you may need based on path or layer.
-
-----------
-April 30, 2013 -- Version 0.8 Initial Release
-
-
+has_raft = 0
 
 current_layer = 0
 override_fan_on_this_layer = 0
@@ -249,6 +219,7 @@ def main(argv):
    parser.add_argument('-o', '--output',required = True, metavar='filename',help='specify the output file to generate')
    parser.add_argument('-s', '--strip', action='store_true', help='Strip redundant move command parameters. Saves a little space, should not change the result, in theory... use at your own risk!')
    parser.add_argument('-d', '--decimate',type=float,metavar='mm', default=0, help='Drop XY movements smaller than this.  Useful to get rid of excessive "micromoves" that are below the printer\'s resolution.  Requires "--strip" option enabled to work')
+   parser.add_argument('-u','--replace', action='append', metavar=('original', 'replacement'), nargs=2, help='Replace a code with another code.  Only replaces codes that appear at the start of a line (ie: not in comments or parameters).  Can be used to comment out codes by adding a ";" to  the code.')
    parser.add_argument('-f', '--fan', metavar='multiplier', type=float, default=1.0, help='Multiply all fan speeds by this.  This only affects fan speeds that were in the original file, not those fan speed commands added by options in this script')
    parser.add_argument('-t', '--temperature', metavar='multiplier', type=float, default=1.0, help='Multiply all extruder temperatures by this. ')
    parser.add_argument('-b', '--bed',  metavar='multiplier',type=float, default=1.0, help='Multiply all bed temps by this')
@@ -290,8 +261,6 @@ def main(argv):
        
 
    print ('------------------------------------')
-   print (version_string)
-   print ('')
  
    print ('Input file is "', inputfile)
    print ('Output file is "', outputfile)
@@ -318,9 +287,15 @@ def main(argv):
 #process the rest of the file
    for line in lines[:-endline]:
     
+        
+        for a in args.replace:
+            line = re.sub ("^"+a[0],a[1]+" ",line)
+
 #first, replace any * in comments as they get confused with checksums
 # when we start echoing comments to the LCD display
         line = re.sub ("\*","-",line)
+#get rid of multiple whitespace        
+        line = re.sub ("\s\s*$"," ",line)
         
 #now look for interesting comments, like the path type:        
         comment_tag = re.search("^;\s+'(.*)'(.*)",line)

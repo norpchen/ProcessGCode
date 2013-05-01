@@ -16,6 +16,8 @@ First, the basics that work with any g-code:
 * Remove XY moves smaller than a given threshold
 * Adjust fan speed, bed and extruder temperatures throughout file
 * Adjust flow and feed rates throughout the file
+* Basic replacement of one command for another (swap G0 for G1, for example)
+* Comment out all instances of a specific code
 
 Then the more fun KISSlicer specific stuff:
 
