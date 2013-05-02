@@ -287,9 +287,9 @@ def main(argv):
 #process the rest of the file
    for line in lines[:-endline]:
     
-        
-        for a in args.replace:
-            line = re.sub ("^"+a[0],a[1]+" ",line)
+        if args.replace:
+            for a in args.replace:
+                line = re.sub ("^"+a[0],a[1]+" ",line)
 
 #first, replace any * in comments as they get confused with checksums
 # when we start echoing comments to the LCD display
