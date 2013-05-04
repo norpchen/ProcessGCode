@@ -18,6 +18,7 @@ First, the basics that work with any g-code:
 * Adjust flow and feed rates throughout the file
 * Basic replacement of one command for another (swap G0 for G1, for example)
 * Comment out all instances of a specific code
+* Enforce a maximum and minimum extruder temperature
 
 Then the more fun KISSlicer specific stuff:
 
@@ -34,5 +35,11 @@ The layer and path type detection from the comments makes it easy to add additio
 
 ----------
 April 30, 2013 -- Version 0.8 Initial Release
-
-
+May 1, 2013 -- Version 0.8.1 
+	* Fixed bug in replacement
+May 3, 2013 -- Version 0.8.2 
+	* Added min and max temperatures for extruder to keep adjusted temperatures in valid ranges
+	* Changed fan option from 'Stacked Sparse Infill' to 'Sparse Infill'
+	* added option to enclose LCD messages in quotes
+	* bug fix on raft cooling
+	

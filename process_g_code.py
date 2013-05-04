@@ -13,6 +13,9 @@
 #
 #
 
+# version 0.8.2 -- 
+#       added min and max temperatures
+#       added quote option for LCD message strings
 # ##################################################################
 
 
@@ -27,7 +30,7 @@ import argparse
 #globals
 args =0
 lcd_comment_string = ""
-version_string = "%(prog)s 0.8.1"
+version_string = "%(prog)s 0.8.2"
 
 # some state information
 has_raft = 0
@@ -51,11 +54,15 @@ delta_y = 0
 delta_e = 0
 delta_f = 0
 delta_z = 0
-
+endquote=''
+last_path_name = ''
 
 #unused at the moment...
 last_layer = ""
 
+def clamp(n, minn, maxn):
+    return max(min(maxn, n), minn)
+    
 # ##################################################################
 # insertline
 # writes a line to the output file and echos it to the console
@@ -82,7 +89,7 @@ def insertline (line, fo):
 def process_G1_movement (line):
     global delta_x, delta_y, delta_e, delta_z, delta_f
     global last_x, last_y, last_e, last_z, last_f
-    global args 
+    global args ,endquote
     use_x = args.strip==False    
     Xcoordindates = re.search("X([\+\-0-9\.]*)",line) 
     if Xcoordindates:
@@ -172,33 +179,33 @@ def process_G1_movement (line):
 # 3. Cool the bed at a certain layer
 
 def startlayer (line, fo): 
-    global fan_speed,args,bed_temperature,current_layer,override_fan_on_this_layer,override_fan_off_this_layer,has_raft,ext_temperature,lcd_comment_string
+    global last_path_name,endquote,fan_speed,args,bed_temperature,current_layer,override_fan_on_this_layer,override_fan_off_this_layer,has_raft,ext_temperature,lcd_comment_string
     current_layer = current_layer + 1
-    print ("---------------------\nStart layer # " , current_layer)
+    print ("---------------------\nProcessing layer # " , current_layer)
     override_fan_on_this_layer = 0
     override_fan_off_this_layer = 0
 # add a layer header and LCD message
     if args.print_layer:
         fo.write( "; --------------------------------------\n")
-        fo.write( lcd_comment_string + "Layer=" + str(current_layer)+ "\n")
+        fo.write( lcd_comment_string + "Layer=" + str(current_layer)+ endquote+"\n")
         fo.write( "; --------------------------------------\n")
         
 #start of a new layer number:
     if has_raft==1 and args.cool_raft:
         if current_layer==2 or current_layer==3:
+            print ("Adding commands for easier raft removal")
             fan_speed = args.cool_raft[0]
             insertline("M106 S"+str(args.cool_raft[0])+" ; fan on for raft layer removal",fo)
             override_fan_on_this_layer = 1
             override_fan_off_this_layer = 1
         if current_layer==3:
-            droptemp = args.temperature*ext_temperature-args.cool_raft[1] #170/200
-            if droptemp < 165: 
-                droptemp= 165
+            droptemp = clamp ((args.temperature*ext_temperature)-args.cool_raft[1] ,  args.minimum_temperature,  args.maximum_temperature)
             insertline("M104 S"+str(droptemp)+" ; lowering temp for first object layer",fo)
         if current_layer==4:
             insertline("M104 S"+str(args.temperature*ext_temperature)+" ; setting temp back to normal",fo)
             insertline("M107 ; fan off completely for second object layer!",fo)
             fan_speed =0
+            print ("Done processing commands for easier raft removal")
             override_fan_on_this_layer = 1
         
         
@@ -210,7 +217,7 @@ def startlayer (line, fo):
 # ##################################################################
   
 def main(argv):
-   global version_string,lcd_comment_string,bed_temperature,args,move_threshold,fan_speed,current_layer,override_fan_on_this_layer,override_fan_off_this_layer,has_raft,ext_temperature
+   global last_path_name,endquote,version_string,lcd_comment_string,bed_temperature,args,move_threshold,fan_speed,current_layer,override_fan_on_this_layer,override_fan_off_this_layer,has_raft,ext_temperature
 
    
    #deal with the command line: 
@@ -219,14 +226,16 @@ def main(argv):
    parser.add_argument('-o', '--output',required = True, metavar='filename',help='specify the output file to generate')
    parser.add_argument('-s', '--strip', action='store_true', help='Strip redundant move command parameters. Saves a little space, should not change the result, in theory... use at your own risk!')
    parser.add_argument('-d', '--decimate',type=float,metavar='mm', default=0, help='Drop XY movements smaller than this.  Useful to get rid of excessive "micromoves" that are below the printer\'s resolution.  Requires "--strip" option enabled to work')
-   parser.add_argument('-u','--replace', action='append', metavar=('original', 'replacement'), nargs=2, help='Replace a code with another code.  Only replaces codes that appear at the start of a line (ie: not in comments or parameters).  Can be used to comment out codes by adding a ";" to  the code.')
+   parser.add_argument('-u','--replace', action='append', metavar=('original', 'replacement'), nargs=2, help='Replace a code with another code. Regex coding is supported (^ for beginning of line, etc). Can be used to comment out codes by adding a ";" to  the code.')
    parser.add_argument('-f', '--fan', metavar='multiplier', type=float, default=1.0, help='Multiply all fan speeds by this.  This only affects fan speeds that were in the original file, not those fan speed commands added by options in this script')
    parser.add_argument('-t', '--temperature', metavar='multiplier', type=float, default=1.0, help='Multiply all extruder temperatures by this. ')
+   parser.add_argument('-j', '--minimum-temperature', default = 170, metavar='degrees', type=int,  help='Enforce a minimum temperature for all extruder temperature settings (including raft cooling).  Will not override extruder off (temp=0) commands.')
+   parser.add_argument('-n', '--maximum-temperature', default = 250, metavar='degrees', type=int,  help='Enforce a maximum temperature for all extruder temperature settings')
    parser.add_argument('-b', '--bed',  metavar='multiplier',type=float, default=1.0, help='Multiply all bed temps by this')
    parser.add_argument('-k', '--cool-bed',  type=int,nargs=2, metavar=('degrees', 'layer'), help='KISSlicer only. Decrease the bed temperature by DEGREES at specified LAYER')
-   parser.add_argument('-q','--cool-support', metavar='fan_speed', type=int, default=0, help='KISSlicer only. Turns the fan on for all "Support Interface" paths')
-   parser.add_argument('-g','--cool-stacked-infill', metavar='fan_speed', type=int, default=0, help='KISSlicer only. Turns the fan on for all "Stacked Sparse Infill" paths')
-   parser.add_argument('-w','--cool-raft',  metavar=('fan_speed', 'temperaturedrop'), nargs=2, type=int, help='KISSlicer only. Adjusts the fan and extrusion temperature to make it easier to remove the raft.  Set the fan speed and temperature reduction for first object layer')
+   parser.add_argument('-q','--cool-support', metavar='fan_speed', type=int, default=0, help='KISSlicer only. Turns the fan on for all "Support Interface" paths. Fan speed is 0 - 255. ')
+   parser.add_argument('-g','--cool-sparse-infill', metavar='fan_speed', type=int, default=0, help='KISSlicer only. Turns the fan on for all "Sparse Infill" paths. Fan speed is 0 - 255. ')
+   parser.add_argument('-w','--cool-raft',  metavar=('fan_speed', 'temperaturedrop'), nargs=2, type=int, help='KISSlicer only. Adjusts the fan and extrusion temperature to make it easier to remove the raft.  Set the fan speed (0-255) and temperature reduction (in degrees) for first object layer')
    parser.add_argument('-x', '--xoffset',  metavar='mm',type=float, default=0, help='Offset all X movements by this.  Use only with absolute coordinate mode.')
    parser.add_argument('-y', '--yoffset', metavar='mm', type=float,  default=0,  help='Offset all Y movements by this.  Use only with absolute coordinate mode.')
    parser.add_argument('-r', '--feedrate', metavar='multiplier', type=float, default=1.0, help='Multiply all movement rates by this (X, Y, Z and Extruder)')
@@ -234,30 +243,24 @@ def main(argv):
    parser.add_argument('-m', '--move-header', action='store_true', help='KISSlicer only. Moves the slicing summary at the end of the file to the head of the file')
    parser.add_argument('-p', '--print-layer', action='store_true', help='KISSlicer only. Print the current layer number on the LCD display')
    parser.add_argument('-v', '--verbose', action='store_true', help='KISSlicer only. Show movement type comments on the LCD display.   This command can be risky on some machines because it adds a lot of extra chatter to the user interface and may cause problems during printing.')
-   parser.add_argument('-l','--LCD-command', type=int, default=70, help='Set the G-Code M command for showing a message on the device display.  M117 for Marlin, M70 for ReplicatorG (default)')
+   parser.add_argument('-l','--LCD-command', default='M70', help='Set the G-Code M command for showing a message on the device display.  M117 for Marlin, M70 for ReplicatorG (default)')
    parser.add_argument('-c', '--colored-movements', action='store_true', help='KISSlicer only. Set RGB LED to show the KISSlicer path type using the M420 command (Makerbot).  This command can be risky on some machines because it adds a lot of extra chatter to the user interface and may cause problems during printing.')
+   parser.add_argument('--quote-comments', action='store_true', help='LCD display commands will wrap quotes around the message')
    parser.add_argument('--version', action='version', version=version_string)
     
    args = parser.parse_args()
 
+   endquote = ''
+   if args.quote_comments:
+        endquote = '"'
+    
    inputfile=args.input #[0] 
    outputfile=args.output #[0]
-   lcd_comment_string =  "M" + str(args.LCD_command)+" "
-   if args.cool_support >255:
-       args.cool_support =255
-   if args.cool_support <0:
-       args.cool_support =0
-           
-   if args.cool_stacked_infill >255:
-       args.cool_stacked_infill =255
-   if args.cool_stacked_infill <0:
-       args.cool_stacked_infill =0
-       
+   lcd_comment_string =  args.LCD_command+" "+endquote
+   args.cool_support = clamp (args.cool_support,0,255)
+   args.cool_sparse_infill = clamp (args.cool_sparse_infill,0,255)
    if args.cool_raft:
-        if args.cool_raft[1] >255:
-            args.cool_raft[1] =255
-        if args.cool_raft[1] <0:
-            args.cool_raft[1] =0
+        args.cool_raft[0] = clamp (args.cool_raft[0],0,255)
        
 
    print ('------------------------------------')
@@ -278,7 +281,7 @@ def main(argv):
        endline = 29
        for line in lines[-30:]:
             if args.print_layer:
-                line = re.sub ("^; Estimated Build Time:\s*",lcd_comment_string+"Est: ",line)
+                line = re.sub ("^; Estimated Build Time:\s*",lcd_comment_string+"Est: "+endquote,line)
             fo.write (line)
 
 #start the layer 1 processing
@@ -289,7 +292,7 @@ def main(argv):
     
         if args.replace:
             for a in args.replace:
-                line = re.sub ("^"+a[0],a[1]+" ",line)
+                line = re.sub (a[0],a[1]+" ",line)
 
 #first, replace any * in comments as they get confused with checksums
 # when we start echoing comments to the LCD display
@@ -300,15 +303,16 @@ def main(argv):
 #now look for interesting comments, like the path type:        
         comment_tag = re.search("^;\s+'(.*)'(.*)",line)
         if comment_tag:
+            last_path_name = comment_tag.group(1)
             if args.verbose:
-                fo.write ((lcd_comment_string + comment_tag.group(1) + "\n"))
+                fo.write ((lcd_comment_string + last_path_name + +endquote+"\n"))
                 
 #handle adding the fan commands to start / stop around specific path types             
-            if comment_tag.group(1)=="Support Interface" and args.cool_support>0:
+            if last_path_name=="Support Interface" and args.cool_support>0:
                 insertline("M106 S"+str(args.cool_support)+" ; fan on for support interface",fo)
                 fanspeedchanged = 1
-            elif comment_tag.group(1)=="Stacked Sparse Infill" and args.cool_stacked_infill>0:
-                insertline("M106 S"+str(args.cool_stacked_infill)+" ; fan on for stacked sparse infill",fo)
+            elif last_path_name=="Sparse Infill" and args.cool_sparse_infill>0:
+                insertline("M106 S"+str(args.cool_sparse_infill)+" ; fan on for sparse infill",fo)
                 fanspeedchanged = 1
             else:
                 if fanspeedchanged==1:
@@ -343,19 +347,22 @@ def main(argv):
 #read the extr temperature                
         temp = re.search("^M10([49]) S(\d*)", line)
         if temp:
-            ext_temperature = int(temp.group(2))
-            print ("Extruder temperature is " + temp.group(2))
-            if args.temperature!=1.0:
-                insertline ("M10"+temp.group(1)+" S"+str(int(ext_temperature*args.temperature))+" ; existing extruder temp command, adjusted by x"+"{0:.4f}".format(args.temperature),fo)
+            x = int(temp.group(2))
+            if x>0: 
+                ext_temperature = clamp(int(x*args.temperature), args.minimum_temperature, args.maximum_temperature)
+            print ("Extruder temperature command:  " + str(x) + " adjusting to " + str(ext_temperature))
+            if args.temperature!=1.0 or ext_temperature!=x:
+                insertline ("M10"+temp.group(1)+" S"+str(ext_temperature)+" ; existing extruder temp command adjusted",fo)
                 line = ""
 
  #read the bed temperature  -- we'll need that to know what to set it to when we cool it down later in start layers
         temp = re.search("^M1([49])0 S(\d*)", line)
         if temp:
-            bed_temperature = int(temp.group(2))
-            print ("Bed temperature is " + temp.group(2))
-            if args.bed!=1.0:
-                insertline ("M1"+temp.group(1)+"0 S"+str(int(bed_temperature*args.bed))+" ; existing bed temp command, adjusted by x"+"{0:.4f}".format(args.bed),fo)
+            x = int(temp.group(2))
+            bed_temperature = clamp(int (x * args.bed),0,120 )
+            print ("Bed temperature command:  " + str(x) + " adjusting to " + str(bed_temperature))
+            if args.bed!=1.0  or bed_temperature!=x:
+                insertline ("M1"+temp.group(1)+"0 S"+str(bed_temperature)+" ; existing bed temp command, adjusted",fo)
                 line = ""
 
 #check for the raft -- if it does and we have the cool-raft option enabled, we'll deal with it in the start layers function
