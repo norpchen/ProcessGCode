@@ -350,10 +350,10 @@ def main(argv):
             x = int(temp.group(2))
             if x>0: 
                 ext_temperature = clamp(int(x*args.temperature), args.minimum_temperature, args.maximum_temperature)
-            print ("Extruder temperature command:  " + str(x) + " adjusting to " + str(ext_temperature))
-            if args.temperature!=1.0 or ext_temperature!=x:
-                insertline ("M10"+temp.group(1)+" S"+str(ext_temperature)+" ; existing extruder temp command adjusted",fo)
-                line = ""
+                print ("Extruder temperature command:  " + str(x) + " adjusting to " + str(ext_temperature))
+                if args.temperature!=1.0 or ext_temperature!=x:
+                    insertline ("M10"+temp.group(1)+" S"+str(ext_temperature)+" ; existing extruder temp command adjusted",fo)
+                    line = ""
 
  #read the bed temperature  -- we'll need that to know what to set it to when we cool it down later in start layers
         temp = re.search("^M1([49])0 S(\d*)", line)
