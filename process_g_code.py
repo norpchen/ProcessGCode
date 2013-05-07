@@ -16,6 +16,9 @@
 # version 0.8.2 -- 
 #       added min and max temperatures
 #       added quote option for LCD message strings
+# version 0.8.3 --
+#       made stacked infill and support interface cooling start after layer 5
+
 # ##################################################################
 
 
@@ -308,10 +311,10 @@ def main(argv):
                 fo.write ((lcd_comment_string + last_path_name + +endquote+"\n"))
                 
 #handle adding the fan commands to start / stop around specific path types             
-            if last_path_name=="Support Interface" and args.cool_support>0:
+            if current_layer > 5 and last_path_name=="Support Interface" and args.cool_support>0:
                 insertline("M106 S"+str(args.cool_support)+" ; fan on for support interface",fo)
                 fanspeedchanged = 1
-            elif last_path_name=="Sparse Infill" and args.cool_sparse_infill>0:
+            elif current_layer > 5 and last_path_name=="Sparse Infill" and args.cool_sparse_infill>0:
                 insertline("M106 S"+str(args.cool_sparse_infill)+" ; fan on for sparse infill",fo)
                 fanspeedchanged = 1
             else:
@@ -383,8 +386,8 @@ def main(argv):
         if match:
             line = startlayer (line, fo)
             
-#  these are color codes for path type, unfortunately setting the I2C BlinkM LED causes 
-# printing pauses and lock ups if done too frequently during a print job!!
+# these are color codes for path type, unfortunately setting the I2C BlinkM LED causes 
+# I2C lock ups if done too frequently during an active print job!!
 # however, these commands may work better on another machine that supports like M420 command, 
 # like the makerbot
         if args.colored_movements:
