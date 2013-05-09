@@ -3,7 +3,9 @@ ProcessGCode
 
 G-Code post processor
 
-Uses Python 3.3.1, but should work in 3.2 or later.   Use -h for help on commands and options.
+Use command line option -h for help on commands and options.
+
+Uses Python 3.3.1, but should work in 3.2 or later.   
 
 Some of the functionality will work on any g-code, but there's more stuff it can do with KISSlicer's output because of the copious comments (thanks Jonathan!) 
 
@@ -19,6 +21,9 @@ First, the basics that work with any g-code:
 * Basic replacement of one command for another (swap G0 for G1, for example)
 * Comment out all instances of a specific code
 * Enforce a maximum and minimum extruder temperature
+* Resume from a given line number (experimental).  All movement commands prior to line number will be tracked but not move the head.  XY position will be recovered, but Z height must be set manually. Be careful of resuming after a retraction, as you might get a blob if your filament moves.
+* Convert all movement to absolute or relative mode
+* Remove or pad all comments.  Padding comments puts a null movement G0 command in front of each comment to prevent the line from being stripped when sent to the printer by the host (useful if you need to track line numbers for a resume).
 
 Then the more fun KISSlicer specific stuff:
 
@@ -42,4 +47,10 @@ May 3, 2013 -- Version 0.8.2
 	* Changed fan option from 'Stacked Sparse Infill' to 'Sparse Infill'
 	* added option to enclose LCD messages in quotes
 	* bug fix on raft cooling
-	
+May 9, 2013 -- Version 0.8.5
+	* Added support for relative movement
+	* Added parsing of G92 and G28 commands
+	* Added support for resume (experimental) 
+	* Added ability to remove or pad comment lines
+	* Changed the way -m works internally
+	* Changed command line option --quote-comments to --quote-messages
