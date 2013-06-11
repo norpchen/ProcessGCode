@@ -1,0 +1,128 @@
+usage: process_g_code.py [-h] -i filename -o filename [-s] [-d mm]
+                         [-u original replacement] [-f multiplier]
+                         [-t multiplier] [-j degrees] [-n degrees]
+                         [-b multiplier] [-k degrees layer] [-q fan_speed]
+                         [-g fan_speed] [-w fan_speed temperaturedrop] [-x mm]
+                         [-y mm] [-z mm] [-r multiplier] [-e multiplier] [-m]
+                         [-p] [-v] [--report-flow] [-l LCD_COMMAND] [-c]
+                         [--quote-messages] [--no-header] [--resume line]
+                         [--movement abs or rel] [--comments pad or remove]
+                         [--wait-temp none, first, or all]
+                         [--split second filename layer, zheight, nthlayer, or path value]
+                         [--inject injected filename layer, zheight, nthlayer, or path value]
+                         [--retract distance speed threshold]
+                         [--wait-bed-temp none, first, or all] [--version]
+
+Monkey around with GCode (especially from KISSlicer) written by Lars Norpchen,
+http://www.octopusmotor.com
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -i filename, --input filename
+                        specify the input file to process
+  -o filename, --output filename
+                        specify the output file to generate
+  -s, --strip           Strip redundant move command parameters. Saves a
+                        little space, should not change the result, in
+                        theory... use at your own risk!
+  -d mm, --decimate mm  Drop XY movements smaller than this. Useful to get rid
+                        of excessive "micromoves" that are below the printer's
+                        resolution. Requires "--strip" option enabled to work
+  -u original replacement, --replace original replacement
+                        Replace a code with another code. Regex coding is
+                        supported (^ for beginning of line, etc). Can be used
+                        to comment out codes by adding a ";" to the code.
+  -f multiplier, --fan multiplier
+                        Multiply all fan speeds by this. This only affects fan
+                        speeds that were in the original file, not those fan
+                        speed commands added by options in this script
+  -t multiplier, --temperature multiplier
+                        Multiply all extruder temperatures by this.
+  -j degrees, --minimum-temperature degrees
+                        Enforce a minimum temperature for all extruder
+                        temperature settings (including raft cooling). Will
+                        not override extruder off (temp=0) commands.
+  -n degrees, --maximum-temperature degrees
+                        Enforce a maximum temperature for all extruder
+                        temperature settings
+  -b multiplier, --bed multiplier
+                        Multiply all bed temps by this
+  -k degrees layer, --cool-bed degrees layer
+                        KISSlicer only. Decrease the bed temperature by
+                        DEGREES at specified LAYER
+  -q fan_speed, --cool-support fan_speed
+                        KISSlicer only. Turns the fan on for all "Support
+                        Interface" paths. Fan speed is 0 - 255.
+  -g fan_speed, --cool-sparse-infill fan_speed
+                        KISSlicer only. Turns the fan on for all "Sparse
+                        Infill" paths. Fan speed is 0 - 255.
+  -w fan_speed temperaturedrop, --cool-raft fan_speed temperaturedrop
+                        KISSlicer only. Adjusts the fan and extrusion
+                        temperature to make it easier to remove the raft. Set
+                        the fan speed (0-255) and temperature reduction (in
+                        degrees) for first object layer
+  -x mm, --xoffset mm   Offset all X movements by this. Use only with absolute
+                        coordinate mode.
+  -y mm, --yoffset mm   Offset all Y movements by this. Use only with absolute
+                        coordinate mode.
+  -z mm, --zoffset mm   Offset all Z movements by this. Use only with absolute
+                        coordinate mode.
+  -r multiplier, --feedrate multiplier
+                        Multiply all movement rates by this (X, Y, Z and
+                        Extruder)
+  -e multiplier, --extrusion-flow multiplier
+                        Multiply extrusion amount by this.
+  -m, --move-header     KISSlicer only. Moves the slicing summary at the end
+                        of the file to the head of the file
+  -p, --print-layer     KISSlicer only. Print the current layer number on the
+                        LCD display
+  -v, --verbose         KISSlicer only. Show movement type comments on the LCD
+                        display. This command can be risky on some machines
+                        because it adds a lot of extra chatter to the user
+                        interface and may cause problems during printing.
+  --report-flow         Report extrusion vs travel rate (micrometers of
+                        filament per mm of travel)
+  -l LCD_COMMAND, --LCD-command LCD_COMMAND
+                        Set the G-Code M command for showing a message on the
+                        device display. M117 for Marlin, M70 for ReplicatorG
+                        (default)
+  -c, --colored-movements
+                        KISSlicer only. Set RGB LED to show the KISSlicer path
+                        type using the M420 command (Makerbot). This command
+                        can be risky on some machines because it adds a lot of
+                        extra chatter to the user interface and may cause
+                        problems during printing.
+  --quote-messages      LCD display commands will wrap quotes around the
+                        message
+  --no-header           Remove the header (all commands before the first layer
+                        command)
+  --resume line         Resume an interrupted print from a given line number.
+                        X and Y position will be set for you, but you need to
+                        manually position the printer's Z height before
+                        resuming. Line number is in the input file, which may
+                        change position in the output file based on other post
+                        processing commands.
+  --movement abs or rel
+                        Output all movement to use absolute or relative mode.
+  --comments pad or remove
+                        Pad or remove comments from gcode file. Pad adds an
+                        empty move command to the start of comment only lines.
+                        Most hosts will not send comments to printer, however
+                        this can cause a line number mismatch between the
+                        original file and the printed file (which makes it
+                        harder to resume).
+  --wait-temp none, first, or all
+                        Wait for extruder temperature changes
+  --split second filename layer, zheight, nthlayer, or path value
+                        Split the file into a second file based on layer,
+                        height or path type.
+  --inject injected filename layer, zheight, nthlayer, or path value
+                        Insert the file snippet based on layer, height or path
+                        type.
+  --retract distance speed threshold
+                        Retract the filament a given number of mm for non-
+                        extrusion moves greater than the threshold (in mm).
+                        Retraction speed is in F code feedrate (mm/min)
+  --wait-bed-temp none, first, or all
+                        Wait for bed temperature changes
+  --version             show program's version number and exit
