@@ -8,8 +8,8 @@ usage: process_g_code.py [-h] -i filename -o filename [-s] [-d mm]
                          [--quote-messages] [--no-header] [--resume line]
                          [--movement abs or rel] [--comments pad or remove]
                          [--wait-temp none, first, or all]
-                         [--split second filename layer, zheight, nthlayer, or path value]
-                         [--inject injected filename layer, zheight, nthlayer, or path value]
+                         [--split filename layer, zheight, nth, or path) value]
+                         [--inject filename (layer, zheight, nth, or path value]
                          [--retract distance speed threshold]
                          [--wait-bed-temp none, first, or all] [--version]
 
@@ -113,10 +113,10 @@ optional arguments:
                         harder to resume).
   --wait-temp none, first, or all
                         Wait for extruder temperature changes
-  --split second filename layer, zheight, nthlayer, or path value
+  --split filename (layer, zheight, nth, or path) value
                         Split the file into a second file based on layer,
                         height or path type.
-  --inject injected filename layer, zheight, nthlayer, or path value
+  --inject filename (layer, zheight, nth, or path) value
                         Insert the file snippet based on layer, height or path
                         type.
   --retract distance speed threshold

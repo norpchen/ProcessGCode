@@ -45,29 +45,29 @@ The layer and path type detection from the comments makes it easy to add additio
 ----------
 April 30, 2013 -- Version 0.8 Initial Release
 May 1, 2013 -- Version 0.8.1 
-	* Fixed bug in replacement
+* Fixed bug in replacement
 May 3, 2013 -- Version 0.8.2 
-	* Added min and max temperatures for extruder to keep adjusted temperatures in valid ranges
-	* Changed fan option from 'Stacked Sparse Infill' to 'Sparse Infill'
-	* added option to enclose LCD messages in quotes
-	* bug fix on raft cooling
+* Added min and max temperatures for extruder to keep adjusted temperatures in valid ranges
+* Changed fan option from 'Stacked Sparse Infill' to 'Sparse Infill'
+* added option to enclose LCD messages in quotes
+* bug fix on raft cooling
 May 9, 2013 -- Version 0.8.5
-	* Added support for relative movement
-	* Added parsing of G92 and G28 commands
-	* Added support for resume (experimental) 
-	* Added ability to remove or pad comment lines
-	* Changed the way -m works internally
-	* Changed command line option --quote-comments to --quote-messages
+* Added support for relative movement
+* Added parsing of G92 and G28 commands
+* Added support for resume (experimental) 
+* Added ability to remove or pad comment lines
+* Changed the way -m works internally
+* Changed command line option --quote-comments to --quote-messages
 May 28, 2013 -- version 0.8.6
-	* Added support for wait on first / all / none temperature setting commands
-	* Added option to report flow (extrusion vs travel)
+* Added support for wait on first / all / none temperature setting commands
+* Added option to report flow (extrusion vs travel)
 June 11, 2013 -- version 0.8.8
-	* Added support for slicing based on path type, layer, zheight or nth layer
-	* Added support for injecting subfiles at path, layer, zheight or nth layer
-	  ** Injected files have the z-coordinates stripped out in all move commands
-	  ** Filament position, head position, and feed speed are preseved around injected subfile
-	  ** Slicing or Injecting do not work well if the slicer does retraction.  Disable retraction in the slicer
-		   and use the filament retraction option in this script after slicing / injection operations
-	* Addded filament retraction support 
-	* Added option to remove header (everything before layer 1 is started) 
-	* Added Z-height offset option
+* Added support for slicing based on path type, layer, zheight or nth layer
+* Added support for injecting subfiles at path, layer, zheight or nth layer
+  ** Injected files have the z-coordinates stripped out in all move commands
+  ** Filament position, head position, and feed speed are preseved around injected subfile
+  ** Slicing or Injecting do not work well if the slicer does retraction.  Disable retraction in the slicer
+	   and use the filament retraction option in this script after slicing / injection operations
+* Addded filament retraction support 
+* Added option to remove header (everything before layer 1 is started) 
+* Added Z-height offset option
