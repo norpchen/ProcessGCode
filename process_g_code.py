@@ -11,14 +11,18 @@
 # Creative Commons : Share-Alike Non-Commericial Attribution License
 #
 #
+# ##################################################################
 # April 30, 2013  (initial release) 
+# ##################################################################
 # May 3, 2013 -- Version 0.8.2 
 # * Added min and max temperatures for extruder to keep adjusted temperatures in valid ranges
 # * Changed fan option from 'Stacked Sparse Infill' to 'Sparse Infill'
 # * added option to enclose LCD messages in quotes
 # * bug fix on raft cooling
+# ##################################################################
 # May 6, 2013 -- version 0.8.3
 # * made stacked infill and support interface cooling start after layer 5
+# ##################################################################
 # May 9, 2013 -- Version 0.8.5
 # * Added support for relative movement
 # * Added parsing of G92 and G28 commands
@@ -26,9 +30,11 @@
 # * Added ability to remove or pad comment lines
 # * Changed the way -m works internally
 # * Changed command line option --quote-comments to --quote-messages
+# ##################################################################
 # May 28, 2013 -- version 0.8.6
 # * Added support for wait on first / all / none temperature setting commands
 # * Added option to report flow (extrusion vs travel)
+# ##################################################################
 # June 11, 2013 -- version 0.8.8
 # * Added support for slicing based on path type, layer, zheight or nth layer
 # * Added support for injecting subfiles at path, layer, zheight or nth layer
@@ -39,14 +45,15 @@
 # * Addded filament retraction support 
 # * Added option to remove header (everything before layer 1 is started) 
 # * Added Z-height offset option
+# ##################################################################
 # Sept 27, 2013
 # * Added support for resume on layer and ZHeight
 # * Started support for merging files
 # * Added ability to overwrite input file and not require an output file
-
+# ##################################################################
 # Dec 24, 2013 
 # * Added scaling of x,y,z axes
-
+# ##################################################################
 #Jan 6, 2014
 # * Added metrics and descript.ion support
 # * Added ability to specify more than one quality setting type / value
@@ -54,6 +61,17 @@
 # * Fixed surplus blank lines and line endings
 # * Added progress percentage report
 # ##################################################################
+# April 3, 2014
+# * Added support for Cura slicer comments for layer and path detection
+# * Added support for M82 M83 extrusion relative / absolute positioning
+# ##################################################################
+# May 26, 2013
+# * Added split and inject based on line numbers
+# TODO:
+# support for -X for line number (based off end of file) 
+# kickstart fan (enforce minimum speed for period of time when going from 0 -- calculate time based on feedrate and movements) 
+# calculate elapsed time at any point 
+# detect ulticode header and don't remove comments for first X lines
 
 
 
@@ -81,6 +99,8 @@ override_fan_off_this_layer = 0
 ext_temperature = 0
 bed_temperature=0
 fan_speed =0 
+slic3r = False    
+cura = False
 
 # these are used to detect redundant moves
 last_x = 0
@@ -104,8 +124,10 @@ endquote=''
 ETA=0
 last_path_name = ''
 relative_movement = False
+relative_extrusion = False
 linenumber = 0
 output_relative_movement = False
+output_relative_extrusion = False
 #unused at the moment...
 last_layer = ""
 #layer_height=0
@@ -194,7 +216,7 @@ def switchOutput (original, cause):
 def process_G1_movement (line, command_override):
     global delta_x, delta_y, delta_e, delta_z, delta_f,peak_x,peak_y,peak_z, min_x, min_y
     global last_x, last_y, last_e, last_z, last_f, total_e
-    global args ,endquote,relative_movement,output_relative_movement
+    global args ,endquote,relative_movement,output_relative_movement,output_relative_extrusion,relative_extrusion
     comment_remover = re.search("^(.*);(.*$)",line)
     comment = ""
     if comment_remover: 
@@ -242,14 +264,17 @@ def process_G1_movement (line, command_override):
     Ecoordindates = re.search("E([\+\-0-9\.]*)",line) 
     if Ecoordindates:
         E = float(Ecoordindates.group(1))
-        if relative_movement:
+        if relative_extrusion:
             E = last_e + E
-        delta_e = E - last_e 
-        total_e = total_e + delta_e
+        
         if E!=last_e:
             use_e = 1
             delta_e = E-last_e
+            total_e = total_e + delta_e
+            #print ("total=" + str(total_e) + " \tdelta=" + str (delta_e) + " \tlastE=" + str (last_e) + " \tcurrent_E=" + str (E))
+            #print ("from " + str (last_e) + " \tto " + str (E) + " \t a difference of " + str (delta_e) + "\t to a total of " + str(total_e))
             last_e = last_e  + delta_e
+
     else:
         use_e = 0
         if args.explicit:
@@ -305,8 +330,6 @@ def process_G1_movement (line, command_override):
             line = line + " Y" +"{:g}".format(round((last_y + args.yoffset),6)) 
         if use_z==1:
             line = line + " Z" +"{:g}".format(round(last_z+ args.zoffset,6) )
-        if use_e==1:
-            line = line + " E" +"{:g}".format(round(last_e * args.extrusion_flow,6))
     else:
         if use_x==1:
             line = line + " X" + "{:g}".format(round((delta_x + args.xoffset),6) )
@@ -316,8 +339,13 @@ def process_G1_movement (line, command_override):
             args.yoffset = 0 
         if use_z==1:
             line = line + " Z" +"{:g}".format(round(delta_z+ args.zoffset,6) )
-        if use_e==1:
-            line = line + " E" +"{:g}".format(round(delta_e * args.extrusion_flow,6))
+
+        
+    if use_e==1:
+          if output_relative_extrusion==False:
+                line = line + " E" +"{:g}".format(round(last_e * args.extrusion_flow,6))
+          else:
+                line = line + " E" +"{:g}".format(round(delta_e * args.extrusion_flow,6))
         
     if use_f==1:    
         line = line + " F" +"{:g}".format(round(last_f * args.feedrate,6)  )
@@ -483,7 +511,9 @@ def startlayer (line):
         elif args.split[1]=='zheight' :
             if layer_height >= float(args.split[2]):
                 switchOutput (True,"Z height >="+ args.split[2])
-    
+        elif args.split[1]=='line':
+            if linenumber==args.split[2]:
+                switchOutput (False,"Line number is"+ args.split[2])
     
     if args.inject:
         if args.inject[1]=='layer' :
@@ -495,7 +525,10 @@ def startlayer (line):
         elif args.inject[1]=='zheight' :
             if layer_height >= float(args.inject[2]):
                 insertFile (args.inject[0])
-    
+        elif args.split[1]=='line':
+            if linenumber==args.split[2]:
+                insertFile (args.inject[0])
+                 
 # add a layer header and LCD message
     if args.print_layer:
         conditional_comment("; --------------------------------------",True);
@@ -561,7 +594,7 @@ def QualitySetting(s):
         
 def main(argv):
    global layer_height,max_layer_height,linenumbers,current_file,lines,layer_heights,foo,foa,fo,output_relative_movement,relative_movement,linenumber,last_path_name,endquote,version_string,lcd_comment_string,bed_temperature,args,move_threshold,fan_speed,current_layer,override_fan_on_this_layer,override_fan_off_this_layer,has_raft,ext_temperature
-   global peak_x, peak_y,peak_z,total_e,min_x,min_y, ETA,materialname,current_output_line
+   global peak_x, peak_y,peak_z,total_e,min_x,min_y, ETA,materialname,current_output_line,slic3r,cura,output_relative_extrusion,relative_extrusion
    start_time = time.time()
    
    #deal with the command line: 
@@ -569,8 +602,8 @@ def main(argv):
    group1 = parser.add_argument_group( 'File input and output options')
    group1.add_argument('-i', '--input',required = True, metavar='filename',help='specify the input file to process')
    group1.add_argument('-o', '--output',required = False, metavar='filename',help='specify the output file to generate.  If not specified, output will overwrite the input file when done.')
-   group1.add_argument('--split', metavar=('filename', '(layer, zheight, nth, or path)','value'),nargs=3,   help='Split the file into a second file based on layer, height or path type.')
-   group1.add_argument('--inject', metavar=('filename', '(layer, zheight, nth, or path)','value'),nargs=3,  help='Insert the file snippet based on layer, height or path type.   MUST use relative E coordindates and disable destringing in slicer')
+   group1.add_argument('--split', metavar=('filename', '(line, layer, zheight, nth, or path)','value'),nargs=3,   help='Split the file into a second file based on line number, layer, height or path type.  Nth is every N layers.')
+   group1.add_argument('--inject', metavar=('filename', '(line, layer, zheight, nth, or path)','value'),nargs=3,  help='Insert the file snippet based on line number, layer, height or path type.   Nth is every N layers.  MUST use relative E coordindates and disable destringing in slicer')
    group1.add_argument('--merge',  metavar=('filename','additional files'), nargs='+', help='Merge the specified file(s). They will be interleaved by layer, sorted based on Z height.  MUST use relative E coordindates and disable destringing in slicer app (you can add retraction commands using the --retract option)') 
    group1.add_argument('--resume', metavar=('line, layer, or Zheight','value'),nargs=2,help='Resume an interrupted print from a given line, layer or ZHeight. X and Y position will be set for you, but you need to manually position the printer\'s Z height before resuming.  Line number is based on the input file, which may change position in the output file based on other post processing commands. ')
  
@@ -591,6 +624,7 @@ def main(argv):
    group3.add_argument('--quality', nargs="+", action='append', metavar=('quality_setting'), help='Adjust the print quality for a given key (path / layer / etc. -- only path is supported at the moment).  Scales speed, acceleration and jerk values for each extrusion move  -- for example 1.0 is normal, 2.0 is half speed and 0.5 is double speed.  This requires printer firmware support for the Q field in the G0/G1 commands.  Multiple quality options can be set, with each of the three required settings for each option being comma separated (ie: --quality 2,0,path,loop 3.0,path,skirt 0.2,path,perimeter ) . ', dest="quality", type=QualitySetting)
    group3.add_argument('-d', '--decimate',type=float,metavar='mm', default=0, help='Drop XY movements smaller than this.  Useful to get rid of excessive "micromoves" that are below the printer\'s resolution.  Requires "--strip" option enabled to work')
    group3.add_argument('--movement', metavar=('abs or rel') ,choices=('abs','rel'),help='Convert / output all movement to use absolute or relative mode.' )
+   group3.add_argument('--extrusion', metavar=('abs or rel') ,choices=('abs','rel'),help='Convert / output all extrusion to use absolute or relative mode.' )
    group3.add_argument('--scalex',  metavar='x',type=float, default=1.0, help='Scale all X movements by this.  Default is 1.0 (unchanged)')
    group3.add_argument('--scaley',  metavar='x',type=float, default=1.0, help='Scale all Y movements by this. Default is 1.0 (unchanged)')
    group3.add_argument('--scalez',  metavar='x',type=float, default=1.0, help='Scale all Z movements by this. Default is 1.0 (unchanged)')
@@ -606,13 +640,13 @@ def main(argv):
    group4.add_argument('-v', '--verbose', action='store_true', help='Slic3r / KISSlicer only. Show movement type comments on the LCD display.   This command can be risky on some machines because it adds a lot of extra chatter to the user interface and may cause problems during printing.')
    group4.add_argument('-l','--LCD-command', default='M70', help='Set the G-Code M command for showing a message on the device display.  M117 for Marlin, M70 for ReplicatorG (default)')
    group4.add_argument('--progress', metavar =('GCode_header','lines'),nargs=2, help='Output progress percentage (based on input file lines) every N lines with the given GCode prefix / header (ie: M73 Q).  Will not give proper values if you merge or insert or split files in the same pass. ')
-   group4.add_argument('-c', '--colored-movements', action='store_true', help='Slic3r / KISSlicer only. Set RGB LED to show the path type using the M420 command (Makerbot).  This command can be risky on some machines because it adds a lot of extra chatter to the user interface and may cause problems during printing.')
+   group4.add_argument('-c', '--colored-movements', action='store_true', help='Cura / Slic3r / KISSlicer only. Set RGB LED to show the path type using the M420 command (Makerbot).  This command can be risky on some machines because it adds a lot of extra chatter to the user interface and may cause problems during printing.')
    group4.add_argument('--quote-messages', action='store_true', help='LCD display commands will wrap quotes around the message')
    
    group5 = parser.add_argument_group( 'GCode comments options')
    group5.add_argument('--comments', metavar=('pad or remove'), choices=('pad','remove'),  help='Pad or remove comments from gcode file.  Pad adds an empty move command to the start of comment only lines.  Most hosts will not send comments to printer, however this can cause a line number mismatch between the original file and the printed file (which makes it harder to resume).')
    group5.add_argument('--no-header', action='store_true', help='Remove the header (all commands before the first layer command)')
-   group5.add_argument('-m', '--move-header', action='store_true', help='KISSlicer only. Moves the slicing summary at the end of the file to the head of the file')
+   group5.add_argument('-m', '--move-header', type=int, default = 0, help='Moves the last X lines (slicing summary) at the end of the file to the head of the file.  KISSlicer uses 30 lines.')
    group5.add_argument('--description', action='store_true', help='Add metrics data to the system DESCRIPT.ION file for the output file')
    group5.add_argument('--metrics', action='store_true', help='Add comments with metrics data to end of the output file')
    group5.add_argument('--report-flow', action='store_true', help='Report extrusion vs travel rate (micrometers of filament per mm of travel)')
@@ -713,10 +747,11 @@ def main(argv):
    if args.resume:
         args.resume[1] = float(args.resume[1])
         print ("Resume mode: " + args.resume[0] + " at " + str(args.resume[1]))
-   if args.move_header:
-       lines[0] = lines[0][-30:] + lines[0]
-   
-   
+   if args.move_header and args.move_header > 0:
+       lines[0] = lines[0][-(args.move_header):] + lines[0]
+       print ("Moving last "+str(args.move_header)+" lines to head of file.")
+
+               
    if args.movement:
        if args.movement=="abs" or args.movement =="absolute":
             insertline (conditional_comment ("; forced movement absolute mode",True),fo)
@@ -726,7 +761,17 @@ def main(argv):
             insertline (conditional_comment ("; forced movement relative mode",True),fo)
             insertline ('G91',fo)
             output_relative_movement = True
-            
+    
+   if args.extrusion:
+       if args.extrusion=="abs" or args.extrusion =="absolute":
+            insertline (conditional_comment ("; forced extrusion absolute mode",True),fo)
+            insertline ('M82',fo)
+            output_relative_extrusion = False
+       if args.extrusion=="rel" or args.extrusion =="relative":
+            insertline (conditional_comment ("; forced extrusion relative mode",True),fo)
+            insertline ('M83',fo)
+            output_relative_extrusion = True
+    
 #process the rest of the file
    current_file =0
    while (True): 
@@ -813,9 +858,26 @@ def main(argv):
             line = process_G1_movement (line,"G3")
             
             
+        temp = re.search("^M82\s+", line)
+        if temp:
+            relative_extrusion = False
+            if args.extrusion:
+                line = "; " + line
+            else:
+                output_relative_extrusion = relative_extrusion
+            
+        temp = re.search("^M83\s+", line)
+        if temp:
+            relative_extrusion = True
+            if args.extrusion:
+                line = "; " + line
+            else:
+                output_relative_extrusion = relative_extrusion            
+            
         temp = re.search("^G90\s+", line)
         if temp:
             relative_movement = False
+            relative_extrusion = False
             if args.movement:
                 line = "; " + line
             else:
@@ -824,6 +886,7 @@ def main(argv):
         temp = re.search("^G91\s+", line)
         if temp:
             relative_movement = True
+            relative_extrusion = True
             if args.movement:
                 line = "; " + line
             else:
@@ -848,16 +911,28 @@ def main(argv):
         if not comment_tag or not comment_tag.group(1):
             # try Slic3r format, which is a comment after every G move
             comment_tag = re.search("G\d\s.*;\s+(.+)",line)
-            
+        if not comment_tag or not comment_tag.group(1):
+            # try Cura format
+            comment_tag = re.search(";TYPE:\s?(.*)",line)
+             
         if comment_tag and comment_tag.group(1):
+            t_last_path_name = str.lower(comment_tag.group(1))
+            
+            # bypass some Slic3r movement comments that are not path types
+            # and do a litle Slic3r->KISSSlicer translation
+            if t_last_path_name.startswith("move to "):
+                t_last_path_name = 'travel'
+            if t_last_path_name.startswith("move inwards before travel"):
+                t_last_path_name="wipe"
+                
             if last_path_name!=str.lower(comment_tag.group(1)):
                 # start a new path
-                last_path_name = str.lower(comment_tag.group(1))
-                print ('Path type changed to ' + last_path_name)
+                last_path_name = t_last_path_name
                 if args.verbose:
                     insertline ((lcd_comment_string + last_path_name + +endquote),fo)
-            
-                       
+                
+                print ('Path type changed to ' + last_path_name)    
+                
                 # CRAP.  Destring retraction is breaking isolating paths....
                 if args.split and args.split[1]=='path': 
                     if str.lower(args.split[2]) in last_path_name:
@@ -871,7 +946,7 @@ def main(argv):
                         insertFile (args.inject[0])
                     
     #handle adding the fan commands to start / stop around specific path types      
-                if current_layer > 5 and last_path_name=="support unterface" and args.cool_support>0:
+                if current_layer > 5 and last_path_name=="support interface" and args.cool_support>0:
                     insertline("M106 S"+str(args.cool_support)+" ; fan on for support interface",fo)
                     args.feedrate = baseline_feedrate * 0.25
                  #   args.extrusion_flow = baseline_flowrate * 2
@@ -898,40 +973,47 @@ def main(argv):
         # however, these commands may work better on another machine that supports like M420 command, 
         # like the makerbot
                 if args.colored_movements:
-                    loline = str.lower(line)
-                    if (re.search("; *'?perimeter'?",loline)):
-                        insertline ("M420 R0 E255 B255 "+conditional_comment (" ; set LED to cyan"),fo)
-        #            line=re.sub("; 'Perimeter'","M420 R0 E255 B255 \n; 'Perimeter'" ,line)
-                    if (re.search("; 'wipe (and de-string)'",loline)):
-                        insertline ("M420 R255 E128 B0 "+conditional_comment (" ; set LED to Orange"),fo)
-                    if (re.search("; *'?solid'?",loline) or re.search("; *fill",loline)):
-                        insertline ("M420 R0 E0 B128 "+conditional_comment (" ; set LED to Dark Blue"),fo)
-                    if (re.search("; *'?loop'?",loline)):
-                        insertline ("M420 R0 E64 B255  "+conditional_comment (" ; set LED to Lt Blue"),fo)
-                    if (re.search("; *'?skirt'?",loline)):
+                    loline = last_path_name
+                   
+                    if (re.search("'?skirt'?",loline)):
                         insertline ("M420 R220 E255 B64  "+conditional_comment (" ; set LED to Yellow"),fo)
-
-                    if (re.search("; *'?crown'?",loline)):
+                        loline=""
+                    if (re.search("'?_?wipe'?",loline)):
+                        insertline ("M420 R255 E128 B0 "+conditional_comment (" ; set LED to Orange"),fo)
+                        loline=""
+                    if (re.search("'?crown'?",loline)):
                         insertline ("M420 R255 E0 B255  "+conditional_comment (" ; set LED to Pink"),fo)
-                    if (re.search("; *'?stacked sparse infill'?",loline)):
+                        loline=""
+                    if (re.search("'?stacked sparse infill'?",loline)):
                         insertline ("M420 R0 E128 B0  "+conditional_comment (" ; set LED to Dk Green"),fo)
-                    if (re.search("; *'?sparse infill'?",loline)):
+                        loline=""
+                    if (re.search("'?sparse infill'?",loline)):
                         insertline ("M420  R0 E255 B0  "+conditional_comment (" ; set LED to Green"),fo)
-                    
-                    if (re.search("; *'?pillar'?",loline)):
+                        loline=""
+                    if (re.search("'?pillar'?",loline)):
                         insertline ("M420 R255 E0 B0 "+conditional_comment (" ; set LED to Red"),fo)
-
-                    if (re.search("; *'?raft'?",loline)):
+                        loline=""
+                    if (re.search("'?raft'?",loline)):
                         insertline ("M420 R255 E0 B0 "+conditional_comment (" ; set LED to Red"),fo)
-                    if (re.search("; *'?support interface'?",loline)):
+                        loline=""
+                    if (re.search("'?support interface'?",loline)):
                         insertline ("M420 R128 E128 B128 "+conditional_comment (" ; set LED to gray"),fo)
-
-                    if (re.search("; *'?support base'?",loline)):
+                        loline=""
+                    if (re.search("'?support'?",loline)):
                         insertline ("M420 R255 E255 B255 "+conditional_comment (" ; set LED to white"),fo)
-
-                    if (re.search("; *'?prime pillar'?",loline)):
+                        loline=""
+                    if (re.search("'?prime pillar'?",loline)):
                         insertline ("M420 R128 E0 B255"+conditional_comment (" ; set LED to purple"),fo)
-            
+                        loline=""
+                    if (re.search("'?perimeter'?",loline) or re.search("wall-inner",loline)):
+                       insertline ("M420 R0 E255 B255 "+conditional_comment (" ; set LED to cyan"),fo)
+                       loline=""
+                    if (re.search("'?solid'?",loline) or re.search("fill",loline)):
+                        insertline ("M420 R0 E0 B128 "+conditional_comment (" ; set LED to Dark Blue"),fo)
+                        loline=""
+                    if (re.search("'?loop'?",loline) or re.search("wall-outer",loline)):
+                        insertline ("M420 R0 E64 B255  "+conditional_comment (" ; set LED to Lt Blue"),fo)
+                        loline=""
         if args.quality:
             for q in args.quality:
             #  print ('checking ' , q, ' -> ' ,q[0])
@@ -943,7 +1025,7 @@ def main(argv):
 #check for the raft -- if it does and we have the cool-raft option enabled, we'll deal with it in the start layers function
         if has_raft==0:
 #            match = re.search("^;\s+'(Raft)|(Pillar)", line)
-            match = re.search(";\s+BEGIN_LAYER_RAFT", line)
+            match = re.search(";.*[ _]raft", str.lower(line))
             if match: 
                 has_raft = 1
                 print ("File has raft!")
@@ -958,16 +1040,22 @@ def main(argv):
             v = match.group(1)
             layer_heights[current_file] = float(str(v))
             SetNextFile()
-        slic3r = False    
+
         match = re.search(";\s+BEGIN_LAYER\S*\sz=([\-0-9.]*)", line)
         if not match:
             # try to find slic3r's layer comment...
             match = re.search(";\s+move to next layer\S*\s\(([\-0-9.]*)\)", line)
-            slic3r = True
+            if match:
+                slic3r = True
+        if not match:
+            # try to find Cura's layer comment...
+            match = re.search(";LAYER:\s*([\-0-9.]*)", line)
+            if match:
+                cura = True
         if match:
             v = match.group(1)
             layer_height = float(str(v))
-            if slic3r:
+            if slic3r or cura:
                 layer_height = last_z
                 SetNextFile()
             line = startlayer (line)
@@ -997,6 +1085,7 @@ def main(argv):
             fo.write (line+'\n')
             current_output_line=current_output_line+1
 
+   current_layer = max (current_layer,1)
    net_layer_height = round(peak_z/current_layer,3)            
    print ('------------------------------------')
    if args.description:
@@ -1025,7 +1114,7 @@ def main(argv):
        insertline (conditional_comment ("; time to process = " + str(round(elapsed_time,2)) + ' seconds',True),fo)
        
        
-       insertline (conditional_comment ("; total filament = " + str(round (total_e/1000,2)) + "m  ( " + str(round (3.28084*total_e/1000,2)) + " feet)",True),fo)
+       insertline (conditional_comment ("; total filament = " + str(round (total_e/1000,3)) + "m  ( " + str(round (3.28084*total_e/1000,3)) + " feet)",True),fo)
        insertline (conditional_comment ("; size x = " + format(round(peak_x-min_x,2)) + "mm",True),fo)
        insertline (conditional_comment ("; size y = " + format(round(peak_y-min_y,2)) + "mm",True),fo)
        insertline (conditional_comment ("; limits x = " + str (min_x) + ' to ' + str(peak_x) + "mm",True),fo)
