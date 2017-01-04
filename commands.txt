@@ -1,33 +1,41 @@
-usage: process_g_code.py [-h] -i filename [-o filename]
-                         [--split filename layer, zheight, nth, or path) value]
-                         [--inject filename (layer, zheight, nth, or path value]
+
+usage: process_g_code.py [-h] -i filename [-o filename] [-umo] [-umi]
+                         [--split filename line, layer, zheight, nth, or path) value]
+                         [--inject filename (line, layer, zheight, nth, or path value]
                          [--merge filename [additional files ...]]
                          [--resume line, layer, or Zheight value]
                          [-f multiplier] [-t multiplier] [-j degrees]
                          [-n degrees] [--wait-temp none, first, or all]
                          [--wait-bed-temp none, first, or all] [-b multiplier]
                          [-k degrees layer] [-q fan_speed] [-g fan_speed]
-                         [-w fan_speed temperaturedrop]
+                         [-w fan_speed temperaturedrop] [--filament mm]
                          [--quality quality_setting [quality_setting ...]]
-                         [-d mm] [--movement abs or rel] [--scalex x]
-                         [--scaley x] [--scalez x] [--scaleall x] [-x mm]
-                         [-y mm] [-z mm] [-r multiplier] [-e multiplier]
-                         [--retract distance speed threshold] [-p] [-v]
+                         [-d mm] [--movement abs or rel]
+                         [--extrusion abs or rel] [--scalex x] [--scaley x]
+                         [--scalez x] [--scaleall x] [-x mm] [-y mm] [-z mm]
+                         [-r multiplier] [-e multiplier]
+                         [--precision decimal points]
+                         [--retract distance speed threshold]
+                         [--report-move-times] [--report-feedrates]
+                         [--no-spaces] [--use-G10-G11] [-p] [-v]
                          [-l LCD_COMMAND] [--progress GCode_header lines] [-c]
                          [--quote-messages] [--comments pad or remove]
-                         [--no-header] [-m] [--description] [--metrics]
-                         [--report-flow] [-u original replacement] [--version]
-                         [--explicit | -s]
+                         [--no-header] [-m MOVE_HEADER] [--description]
+                         [--metrics] [--report-flow] [--keep_pre_resume]
+                         [--leave_z_on_resume] [-u original replacement]
+                         [--version] [--explicit | -s | --compress]
 
-Monkey around with GCode (especially from KISSlicer, Slic3r support not
-thoroughly tested) written by Lars Norpchen, http://www.octopusmotor.com
+Monkey around with GCode (especially from KISSlicer. Cura, Craftware and
+Slic3r support not thoroughly tested) written by Lars Norpchen,
+http://www.octopusmotor.com
 
 optional arguments:
   -h, --help            show this help message and exit
   -u original replacement, --replace original replacement
                         Replace a code with another code. Regex coding is
-                        supported (^ for beginning of line, etc). Can be used
-                        to comment out codes by adding a ";" to the code.
+                        supported (^ for beginning of line, etc). Use ~ for
+                        space. Can be used to comment out codes by adding a
+                        ";" to the code.
   --version             show program's version number and exit
 
 File input and output options:
@@ -36,26 +44,32 @@ File input and output options:
   -o filename, --output filename
                         specify the output file to generate. If not specified,
                         output will overwrite the input file when done.
-  --split filename (layer, zheight, nth, or path) value
-                        Split the file into a second file based on layer,
-                        height or path type.
-  --inject filename (layer, zheight, nth, or path) value
-                        Insert the file snippet based on layer, height or path
-                        type. MUST use relative E coordindates and disable
-                        destringing in slicer
+  -umo, --ultimaker-out
+                        Output Ultimaker G-Code (extrusion by volume)
+  -umi, --ultimaker-in  Input file is Ultimaker G-Code (extrusion by volume)
+  --split filename (line, layer, zheight, nth, or path) value
+                        Split the file into a second file based on line
+                        number, layer, height or path type. Nth is every N
+                        layers.
+  --inject filename (line, layer, zheight, nth, or path) value
+                        Insert the file snippet based on line number, layer,
+                        height or path type. Nth is every N layers. MUST use
+                        relative E coordindates and disable destringing in
+                        slicer
   --merge filename [additional files ...]
                         Merge the specified file(s). They will be interleaved
                         by layer, sorted based on Z height. MUST use relative
-                        E coordindates and disable destringing in slicer app
+                        E coordindates and disable destringing in slicer app #
                         (you can add retraction commands using the --retract
                         option)
   --resume line, layer, or Zheight value
                         Resume an interrupted print from a given line, layer
-                        or ZHeight. X and Y position will be set for you, but
-                        you need to manually position the printer's Z height
-                        before resuming. Line number is based on the input
-                        file, which may change position in the output file
-                        based on other post processing commands.
+                        or ZHeight. X, Y and Z positions will be set for you,
+                        and you need to manually position the printer's Z
+                        height before resuming. Line number is not recommended
+                        as it is based on the input file, which may change
+                        position in the output file based on other post
+                        processing commands.
 
 Fan and Temperature control options:
   -f multiplier, --fan multiplier
@@ -91,24 +105,28 @@ Fan and Temperature control options:
                         temperature to make it easier to remove the raft. Set
                         the fan speed (0-255) and temperature reduction (in
                         degrees) for first object layer
+  --filament mm         input file's assumed filament diameter -- for
+                        converting linear to volumetric extrusions
 
 Movement control options:
   --quality quality_setting [quality_setting ...]
                         Adjust the print quality for a given key (path / layer
-                        / etc. -- only path is supported at the moment).
-                        Scales speed, acceleration and jerk values for each
-                        extrusion move -- for example 1.0 is normal, 2.0 is
-                        half speed and 0.5 is double speed. This requires
-                        printer firmware support for the Q field in the G0/G1
-                        commands. Multiple quality options can be set, with
-                        each of the three required settings for each option
-                        being comma separated (ie: --quality 2,0,path,loop
-                        3.0,path,skirt 0.2,path,perimeter ) .
+                        / etc. -- only path type is supported at the moment).
+                        If supported in printer's firmware, this scales speed,
+                        acceleration and jerk values for each extrusion move
+                        -- for example 1.0 is normal, 2.0 is half speed and
+                        0.5 is double speed. Multiple quality options can be
+                        set, with each of the three required settings for each
+                        option being comma separated (ie: --quality
+                        2,0,path,loop 3.0,path,skirt 0.2,path,perimeter ) .
   -d mm, --decimate mm  Drop XY movements smaller than this. Useful to get rid
                         of excessive "micromoves" that are below the printer's
                         resolution. Requires "--strip" option enabled to work
   --movement abs or rel
                         Convert / output all movement to use absolute or
+                        relative mode.
+  --extrusion abs or rel
+                        Convert / output all extrusion to use absolute or
                         relative mode.
   --scalex x            Scale all X movements by this. Default is 1.0
                         (unchanged)
@@ -129,15 +147,27 @@ Movement control options:
                         Extruder)
   -e multiplier, --extrusion-flow multiplier
                         Multiply extrusion amount by this.
+  --precision decimal points
+                        Round XYZ movement to the given number of decimal
+                        points. Extruder position E and arc definitions I / J
+                        are not rounded
   --retract distance speed threshold
                         Retract the filament a given number of mm for non-
                         extrusion moves greater than the threshold (in mm).
                         Retraction speed is in F code feedrate (mm/min)
-  --explicit            Force all coordinates to be listed in all G0/G1
+  --report-move-times   Output the time in comment are for each move
+  --report-feedrates    Add comments showing changes to feedrate in mm/s
+  --no-spaces           Remove unneed spaces in commands
+  --use-G10-G11         Replaces retraction and un-retract gcode with G10 /
+                        G11 for printer controlled retraction
+  --explicit            Force all coordinates to be listed in all G0/G1/G2/G3
                         commands
   -s, --strip           Strip redundant move command parameters. Saves a
                         little space, should not change the result, in
                         theory... use at your own risk!
+  --compress            Strip redundant move command parameters, remove
+                        spaces, turn off comments. Makes a smaller file, less
+                        human readable, but still valid to the printer.
 
 Printer user interface options:
   -p, --print-layer     Slic3r / KISSlicer only. Print the current layer
@@ -156,11 +186,11 @@ Printer user interface options:
                         (ie: M73 Q). Will not give proper values if you merge
                         or insert or split files in the same pass.
   -c, --colored-movements
-                        Slic3r / KISSlicer only. Set RGB LED to show the path
-                        type using the M420 command (Makerbot). This command
-                        can be risky on some machines because it adds a lot of
-                        extra chatter to the user interface and may cause
-                        problems during printing.
+                        Cura / Slic3r / KISSlicer only. Set RGB LED to show
+                        the path type using the M420 command (Makerbot). This
+                        command can be risky on some machines because it adds
+                        a lot of extra chatter to the user interface and may
+                        cause problems during printing.
   --quote-messages      LCD display commands will wrap quotes around the
                         message
 
@@ -174,11 +204,17 @@ GCode comments options:
                         harder to resume).
   --no-header           Remove the header (all commands before the first layer
                         command)
-  -m, --move-header     KISSlicer only. Moves the slicing summary at the end
-                        of the file to the head of the file
+  -m MOVE_HEADER, --move-header MOVE_HEADER
+                        Moves the last X lines (slicing summary) at the end of
+                        the file to the head of the file. KISSlicer uses 30
+                        lines.
   --description         Add metrics data to the system DESCRIPT.ION file for
                         the output file
   --metrics             Add comments with metrics data to end of the output
                         file
-  --report-flow         Report extrusion vs travel rate (micrometers of
-                        filament per mm of travel)
+  --report-flow         Add comments to movement showing extrusion vs travel
+                        rate (micrometers of filament per mm of travel)
+  --keep_pre_resume     Keep movement commands as comments instead of deleting
+                        them
+  --leave_z_on_resume   Leave the Z height when resume (assume head already at
+                        proper Z

@@ -22,13 +22,17 @@ First, the basics that work with any g-code:
 * Basic replacement of one command for another (swap G0 for G1, for example)
 * Comment out all instances of a specific code
 * Enforce a maximum and minimum extruder temperature
-* Resume from a given line number, layer or z-height.  All movement commands prior will be tracked but not move the head.  XY position will be recovered, but Z height must be set manually. Be careful of resuming after a retraction, as you might get a blob if your filament moves.
+* change bed & extruder temperature commands between wait / no-wait / first 
+* Resume from a given line number, layer or z-height.  All movement commands prior will be tracked but not move the head.  XY position will be recovered, but Z height can be optionally set manually. Be careful of resuming after a retraction, as you might get a blob if your filament moves.
 * Convert all movement to absolute or relative mode
 * Remove or pad all comments.  Padding comments puts a null movement G0 command in front of each comment to prevent the line from being stripped when sent to the printer by the host (useful if you need to track line numbers for a resume).
 * Remove any headers
 * Add filament retraction to non-extrusion moves
 * Create a DESCRIPT.ION file for the output with same basic metrics
-* Append basic metrics to the end of the file (as comments)
+* Append basic metrics to the end (or head) of the file (as comments)
+* rough time estimates
+* convert slicer generated retraction commands to G10 and G11 commands
+* convert to and from Ulticode flavor of gcode (volumetric extrusion units, G10/G11 retraction) 
 
 Then the more fun KISSlicer / Slic3r specific stuff:
 
@@ -96,5 +100,26 @@ Jan 6, 2014 -- Version 0.9.5
  * Added path and layer detection for Slic3r generated gcode
  * Fixed surplus blank lines and line endings
  * Added progress percentage report
+
+ April 3, 2014
+ * Added support for Cura slicer comments for layer and path detection
+ * Added support for M82 M83 extrusion relative / absolute positioning
  
+ May 26, 2014
+ * Added split and inject based on line numbers
  
+ Aug 26, 2016 v0.9.7
+  * added support for ultigcode / volumetric input and output conversion
+  * option to set Z on resume
+  * option to remove all movement commands (instead of commenting them out) prior to the resume 
+  * ultigcode (for ultimaker printers) includes disabling heater commands at start and proper header
+  * really crappy time estimates
+  * G10/G11 retract / unretract commands for ultigcode
+  * G2 and G3 commands (arc movements) support I and J params to properly reassemble in the line movement processor
+  * moved metrics report to top of file
+ 
+ Jan 1, 2017 v 0.9.8.1
+   Added / changed metrics info for Duet boards to parse
+   added space ~ wildcard to --replace option
+   added peak bed and extruder temp tracking
+   changed Cura info processing for Cura 2.3 
