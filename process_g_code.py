@@ -207,7 +207,7 @@ def insertFile (filename):
     fi = open(filename)
     lines2 = fi.readlines()
     for line2 in lines2:
-        line2 = re.sub ("\r"," ",line)
+        line2 = re.sub ("\r"," ",line2)
         temp = re.search("^(G[01]\s.*)(Z[0-9.\-]+)(.*)", line2)
         if temp:
             line2 = temp.group(1) + temp.group(3)
