@@ -131,6 +131,10 @@ last_y = 0
 last_e = 0
 last_f = 0
 last_z = 0
+dir_x = 0
+dir_y = 0
+dir_z = 0
+compensate_x, compensate_y, compensate_z = 0, 0, 0
 peak_x = 0
 peak_y = 0
 peak_z = 0
@@ -263,6 +267,7 @@ def process_G1_movement (line, command_override):
     global delta_x, delta_y, delta_e, delta_z, delta_f,peak_x,peak_y,peak_z, min_x, min_y,last_path_name
     global last_x, last_y, last_e, last_z, last_f, total_e, retracted 
     global args ,endquote,relative_movement,output_relative_movement,output_relative_extrusion,relative_extrusion,total_time
+    global dir_x, dir_y, dir_z, compensate_x, compensate_y, compensate_z
     comment_remover = re.search("^(.*);(.*$)",line)
     comment = ""
     if comment_remover:                                     # grab the old comment, if any
@@ -382,24 +387,71 @@ def process_G1_movement (line, command_override):
             if args.explicit:
                use_j = 1
 
+# track directions
+    new_dirs = (
+        dir_x if (not use_x or delta_x == 0) else (1 if abs(delta_x) == delta_x else -1),
+        dir_y if (not use_y or delta_y == 0) else (1 if abs(delta_y) == delta_y else -1),
+        dir_z if (not use_z or delta_z == 0) else (1 if abs(delta_z) == delta_z else -1),
+    )
+    # silently set direction if it's previously undefined (0)
+    dirs_changed = (
+        False if dir_x == 0 else (new_dirs[0] != dir_x),
+        False if dir_y == 0 else (new_dirs[1] != dir_y),
+        False if dir_z == 0 else (new_dirs[2] != dir_z),
+    )
+    compensation_updated = any(dirs_changed)
+    backlash_with_dir = (
+        args.xcompensate if delta_x >= 0 else -args.xcompensate,
+        args.ycompensate if delta_y >= 0 else -args.ycompensate,
+        args.zcompensate if delta_z >= 0 else -args.zcompensate,
+    )
+    compensate_action = zip(dirs_changed, backlash_with_dir, (compensate_x, compensate_y, compensate_z))
+    compensate_x, compensate_y, compensate_z = (new if dc else old for dc, new, old in compensate_action)
+
+    dir_x, dir_y, dir_z = new_dirs
+
+    line = ''
+    for dc, comp in zip(dirs_changed, (compensate_x, compensate_y, compensate_z)):
+        if dc and comp != 0:
+            line += conditional_comment('; movement compensation triggered{}{}{}\n'.format(
+                ' x+={:g}'.format(compensate_x) if dirs_changed[0] and compensate_x != 0 else '',
+                ' y+={:g}'.format(compensate_y) if dirs_changed[1] and compensate_y != 0 else '',
+                ' z+={:g}'.format(compensate_z) if dirs_changed[2] and compensate_z != 0 else '',
+            ))
+            break
+    if output_relative_movement and compensation_updated:
+        line_compensate = ['G1']
+        if compensate_x:
+            params.append('X{:g}'.format(round(compensate_x, args.precision)))
+            compensate_x = 0
+        if compensate_y:
+            params.append('Y{:g}'.format(round(compensate_y, args.precision)))
+            compensate_y = 0
+        if compensate_z:
+            params.append('Z{:g}'.format(round(compensate_z, args.precision)))
+            compensate_z = 0
+        line += ' '.join(line_compensate)
+        line += conditional_comment('; relative movement compensation')
+        line += '\n'
+
 # rebuild the G1 command
     if use_x==0 and use_y==0 and use_e==0 and use_z==0 and use_f==0:
         return conditional_comment (comment)
     if command_override: 
-        line = command_override
+        line += command_override
     else:
-        line = "G1" 
+        line += "G1" 
     if Qfactor: 
         line = line + " Q" + Qfactor.group(1) + " "
     if Afactor: 
         line = line + " Q" + Afactor.group(1) + " "
     if output_relative_movement==False:
         if use_x==1:
-            line = line + " X" + "{:g}".format(round((last_x + args.xoffset),args.precision) )
+            line = line + " X" + "{:g}".format(round((last_x + args.xoffset + compensate_x),args.precision) )
         if use_y==1:
-            line = line + " Y" +"{:g}".format(round((last_y + args.yoffset),args.precision)) 
+            line = line + " Y" +"{:g}".format(round((last_y + args.yoffset + compensate_y),args.precision)) 
         if use_z==1:
-            line = line + " Z" +"{:g}".format(round(last_z+ args.zoffset,args.precision) )
+            line = line + " Z" +"{:g}".format(round(last_z+ args.zoffset + compensate_z,args.precision) )
     else:
         if use_x==1:
             line = line + " X" + "{:g}".format(round((delta_x + args.xoffset),args.precision) )
@@ -453,7 +505,7 @@ def process_G1_movement (line, command_override):
                 return line
     total_distance = math.sqrt (delta_x * delta_x + delta_y * delta_y)
     if total_distance > 0 and args.report_flow: 
-        if args.ultimaker-out: 
+        if args.ultimaker_out: 
             line = line + conditional_comment('; extrude microns^2 per mm = ' + str(1000*delta_e / total_distance) + ' over ' + str(total_distance) + 'mm')
         else:   
             line = line + conditional_comment('; extrude microns per mm = ' + str(1000*delta_e / total_distance) + ' over ' + str(total_distance) + 'mm')
@@ -466,7 +518,7 @@ def process_G1_movement (line, command_override):
     peak_x = max (last_x, peak_x)
     peak_y = max (last_y, peak_y)
     peak_z = max (last_z, peak_z)
-    
+
 #check for a resume state    
     if args.resume and args.resume[1] >0:
         if not args.keep_pre_resume: 
@@ -869,6 +921,9 @@ def main(argv):
    group3.add_argument('-x', '--xoffset',  metavar='mm',type=float, default=0, help='Offset all X movements by this.  Use only with absolute coordinate mode.')
    group3.add_argument('-y', '--yoffset', metavar='mm', type=float,  default=0,  help='Offset all Y movements by this.  Use only with absolute coordinate mode.')
    group3.add_argument('-z', '--zoffset', metavar='mm', type=float,  default=0,  help='Offset all Z movements by this.  Use only with absolute coordinate mode.')
+   group3.add_argument('-X', '--xcompensate',  metavar='mm', type=float, default=0, help='Offset all X movements by this when switching directions (movement/backlash compensation).')
+   group3.add_argument('-Y', '--ycompensate', metavar='mm', type=float,  default=0,  help='Offset all Y movements by this when switching directions (movement/backlash compensation).')
+   group3.add_argument('-Z', '--zcompensate', metavar='mm', type=float,  default=0,  help='Offset all Z movements by this when switching directions (movement/backlash compensation).')
    group3.add_argument('-r', '--feedrate', metavar='multiplier', type=float, default=1.0, help='Multiply all movement rates by this (X, Y, Z and Extruder)')
    group3.add_argument('-e', '--extrusion-flow' , metavar='multiplier', type=float,  default=1.0,  help='Multiply extrusion amount by this.')
    group3.add_argument('--precision' , metavar='decimal points', type=int,  default=-1,  help='Round XYZ movement to the given number of decimal points.  Extruder position E and arc definitions I / J are not rounded')

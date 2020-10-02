@@ -13,8 +13,8 @@ usage: process_g_code.py [-h] -i filename [-o filename] [-umo] [-umi]
                          [-d mm] [--movement abs or rel]
                          [--extrusion abs or rel] [--scalex x] [--scaley x]
                          [--scalez x] [--scaleall x] [-x mm] [-y mm] [-z mm]
-                         [-r multiplier] [-e multiplier]
-                         [--precision decimal points]
+                         [-X mm] [-Y mm] [-Z mm] [-r multiplier]
+                         [-e multiplier] [--precision decimal points]
                          [--retract distance speed threshold]
                          [--report-move-times] [--report-feedrates]
                          [--no-spaces] [--use-G10-G11] [-p] [-v]
@@ -142,6 +142,15 @@ Movement control options:
                         coordinate mode.
   -z mm, --zoffset mm   Offset all Z movements by this. Use only with absolute
                         coordinate mode.
+  -X mm, --xcompensate mm
+                        Offset all X movements by this when switching
+                        directions (movement/backlash compensation).
+  -Y mm, --ycompensate mm
+                        Offset all Y movements by this when switching
+                        directions (movement/backlash compensation).
+  -Z mm, --zcompensate mm
+                        Offset all Z movements by this when switching
+                        directions (movement/backlash compensation).
   -r multiplier, --feedrate multiplier
                         Multiply all movement rates by this (X, Y, Z and
                         Extruder)
