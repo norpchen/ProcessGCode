@@ -245,7 +245,7 @@ def switchOutput (original, cause):
             insertline ('G1 X'+str(last_x) + " Y"+str(last_y) +' Z'+str(last_z) +' F'+str(last_f),fo)
         else:
             insertline ('G1 F'+str(last_f),fo)
-    
+
 
 # ##################################################################
 # Process_G1_Movement (string)
@@ -393,19 +393,21 @@ def process_G1_movement (line, command_override):
         dir_y if (not use_y or delta_y == 0) else (1 if abs(delta_y) == delta_y else -1),
         dir_z if (not use_z or delta_z == 0) else (1 if abs(delta_z) == delta_z else -1),
     )
-    # silently set direction if it's previously undefined (0)
+    # force change direction if it's previously undefined (0)
     dirs_changed = (
-        False if dir_x == 0 else (new_dirs[0] != dir_x),
-        False if dir_y == 0 else (new_dirs[1] != dir_y),
-        False if dir_z == 0 else (new_dirs[2] != dir_z),
+        True if dir_x == 0 else (new_dirs[0] != dir_x),
+        True if dir_y == 0 else (new_dirs[1] != dir_y),
+        True if dir_z == 0 else (new_dirs[2] != dir_z),
     )
     compensation_updated = any(dirs_changed)
-    backlash_with_dir = (
+    compensation_with_dir = (
         args.xcompensate if delta_x >= 0 else -args.xcompensate,
         args.ycompensate if delta_y >= 0 else -args.ycompensate,
         args.zcompensate if delta_z >= 0 else -args.zcompensate,
     )
-    compensate_action = zip(dirs_changed, backlash_with_dir, (compensate_x, compensate_y, compensate_z))
+    compensate_params_old = (compensate_x, compensate_y, compensate_z)
+
+    compensate_action = zip(dirs_changed, compensation_with_dir, compensate_params_old)
     compensate_x, compensate_y, compensate_z = (new if dc else old for dc, new, old in compensate_action)
 
     dir_x, dir_y, dir_z = new_dirs
@@ -419,20 +421,6 @@ def process_G1_movement (line, command_override):
                 ' z+={:g}'.format(compensate_z) if dirs_changed[2] and compensate_z != 0 else '',
             ))
             break
-    if output_relative_movement and compensation_updated:
-        line_compensate = ['G1']
-        if compensate_x:
-            params.append('X{:g}'.format(round(compensate_x, args.precision)))
-            compensate_x = 0
-        if compensate_y:
-            params.append('Y{:g}'.format(round(compensate_y, args.precision)))
-            compensate_y = 0
-        if compensate_z:
-            params.append('Z{:g}'.format(round(compensate_z, args.precision)))
-            compensate_z = 0
-        line += ' '.join(line_compensate)
-        line += conditional_comment('; relative movement compensation')
-        line += '\n'
 
 # rebuild the G1 command
     if use_x==0 and use_y==0 and use_e==0 and use_z==0 and use_f==0:
@@ -447,20 +435,24 @@ def process_G1_movement (line, command_override):
         line = line + " Q" + Afactor.group(1) + " "
     if output_relative_movement==False:
         if use_x==1:
-            line = line + " X" + "{:g}".format(round((last_x + args.xoffset + compensate_x),args.precision) )
+            line = line + " X" + "{:g}".format(round((last_x + args.xoffset + compensate_x), args.precision))
         if use_y==1:
-            line = line + " Y" +"{:g}".format(round((last_y + args.yoffset + compensate_y),args.precision)) 
+            line = line + " Y" + "{:g}".format(round((last_y + args.yoffset + compensate_y), args.precision))
         if use_z==1:
-            line = line + " Z" +"{:g}".format(round(last_z+ args.zoffset + compensate_z,args.precision) )
+            line = line + " Z" + "{:g}".format(round((last_z + args.zoffset + compensate_z), args.precision))
     else:
         if use_x==1:
-            line = line + " X" + "{:g}".format(round((delta_x + args.xoffset),args.precision) )
+            line = line + " X" + "{:g}".format(round((delta_x + args.xoffset + compensate_x), args.precision))
             args.xoffset = 0
+            compensate_x = 0
         if use_y==1:
-            line = line + " Y" +"{:g}".format(round((delta_y + args.yoffset),args.precision)) 
-            args.yoffset = 0 
+            line = line + " Y" + "{:g}".format(round((delta_y + args.yoffset + compensate_y), args.precision))
+            args.yoffset = 0
+            compensate_y = 0
         if use_z==1:
-            line = line + " Z" +"{:g}".format(round(delta_z+ args.zoffset,args.precision) )
+            line = line + " Z" + "{:g}".format(round((delta_z + args.zoffset + compensate_z), args.precision))
+            args.zoffset = 0
+            compensate_z = 0
     if use_i==1:
         line = line + "I" + icoordinate
     if use_j==1:
@@ -1110,9 +1102,9 @@ def main(argv):
             insertline (conditional_comment ("; forced extrusion relative mode",True),fo)
             insertline ('M83',fo)
             output_relative_extrusion = True
-   
-        
-    
+
+
+
 #process the rest of the file
    current_file =0
    while (True): 
