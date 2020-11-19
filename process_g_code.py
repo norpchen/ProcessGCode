@@ -468,7 +468,7 @@ def process_G1_movement (line, command_override):
     else:
         if max_dist < 30:
             max_dist *=4;
-    delta_t =  (max_dist / (last_f /60))
+    delta_t =  (max_dist / (last_f /60)) if last_f else 0
     delta_t = (delta_t * 1.2000)         # rough estimate of acceleration delays
     total_time = total_time + delta_t
     if args.report_move_times:
