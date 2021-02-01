@@ -387,6 +387,9 @@ def process_G1_movement (line, command_override):
             if args.explicit:
                use_j = 1
 
+    use_i_standalone = re.search("( I )", line)
+    use_s = re.search("S([0-9]+)", line)
+
 # track directions
     new_dirs = (
         dir_x if (not use_x or delta_x == 0) else (1 if abs(delta_x) == delta_x else -1),
@@ -457,7 +460,10 @@ def process_G1_movement (line, command_override):
         line = line + "I" + icoordinate
     if use_j==1:
         line = line + "J" + jcoordinate
-
+    if use_i_standalone:
+        line = line + use_i_standalone.group(0)
+    if use_s:
+        line = line + " " + use_s.group(0)
 
 # estimate time
     max_dist = max (delta_x, delta_y)
@@ -468,7 +474,7 @@ def process_G1_movement (line, command_override):
     else:
         if max_dist < 30:
             max_dist *=4;
-    delta_t =  (max_dist / (last_f /60))
+    delta_t =  (max_dist / (last_f /60)) if last_f else 0
     delta_t = (delta_t * 1.2000)         # rough estimate of acceleration delays
     total_time = total_time + delta_t
     if args.report_move_times:
